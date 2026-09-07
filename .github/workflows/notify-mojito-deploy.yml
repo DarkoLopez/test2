@@ -22,4 +22,4 @@ jobs:
             --arg sha "$MOJITO_SHA" \
             --arg branch "$MOJITO_BRANCH" \
             '{event_type: "mojito-updated", client_payload: {sha: $sha, branch: $branch}}' \
-          | gh api repos/DarkoLopez/test2/dispatches --input -
+          | gh api repos/DarkoLopez/test/dispatches --input -
