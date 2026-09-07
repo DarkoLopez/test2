@@ -1,0 +1,25 @@
+name: Notify mojito-deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  notify:
+    name: Dispatch mojito-updated
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch to pinternal/mojito-deploy
+        env:
+          GH_TOKEN: ${{ secrets.MOJITO_DEPLOY_DISPATCH_TOKEN }}
+          MOJITO_SHA: ${{ github.sha }}
+          MOJITO_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          jq -nc \
+            --arg sha "$MOJITO_SHA" \
+            --arg branch "$MOJITO_BRANCH" \
+            '{event_type: "mojito-updated", client_payload: {sha: $sha, branch: $branch}}' \
+          | gh api repos/DarkoLopez/test2/dispatches --input -
