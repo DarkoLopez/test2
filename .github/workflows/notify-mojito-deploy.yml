@@ -29,7 +29,7 @@ jobs:
       # JWT signed with the private key, exchanged for an installation token; the
       # repo the runner sits in never enters into it. Only the installation on
       # pinternal/mojito-deploy matters.
-      - name: Mint app token for DarkoLopez/test2
+      - name: Mint app token for DarkoLopez/test
         id: app-token
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
@@ -39,12 +39,12 @@ jobs:
           # *current* repository, which would look for an installation on
           # pinterest/mojito and 404. The two orgs differ on purpose.
           owner: DarkoLopez
-          repositories: test2
+          repositories: test
           # POST /dispatches needs contents: write. There is no narrower
           # dispatch-specific permission, so this is the floor, not a choice.
           permission-contents: write
 
-      - name: Dispatch to DarkoLopez/test2
+      - name: Dispatch to DarkoLopez/test
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           MOJITO_SHA: ${{ github.sha }}
@@ -57,7 +57,7 @@ jobs:
             --arg sha "$MOJITO_SHA" \
             --arg branch "$MOJITO_BRANCH" \
             '{event_type: "mojito-updated", client_payload: {sha: $sha, branch: $branch}}' \
-          | gh api repos/DarkoLopez/test2/dispatches --input -
+          | gh api repos/DarkoLopez/test/dispatches --input -
 
       # The dispatch is a trigger, not an instruction: the receiving workflow
       # re-resolves mojito master itself and ignores the payload SHA. Losing a
