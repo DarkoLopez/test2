@@ -1,25 +1,89 @@
+# This file is NOT active in mojito-deploy. It belongs in the *upstream* repo:
+# copy it to pinterest/mojito as .github/workflows/notify-mojito-deploy.yml.
+#
+# It needs two secrets there, MOJITO_DEPLOY_DISPATCH_APP_ID and
+# MOJITO_DEPLOY_DISPATCH_APP_PRIVATE_KEY, for a GitHub App installed on
+# pinternal/mojito-deploy. See the "Threat model" note at the bottom before
+# creating them: pinterest/mojito is public, and these grant write access to the
+# deploy repo.
 name: Notify mojito-deploy
 
 on:
   push:
     branches: [master]
 
+# The job's own GITHUB_TOKEN is unused: everything here targets another repo,
+# which GITHUB_TOKEN cannot reach by design.
 permissions: {}
 
 jobs:
   notify:
     name: Dispatch mojito-updated
+    # Forks get no secrets, so without this every fork of mojito would run this
+    # job on every push to its master and fail. Cheaper to not run at all.
+    if: github.repository == 'DarkoLopez/test2'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Dispatch to pinternal/mojito-deploy
+      # The app does NOT need to be installed on pinterest/mojito. App auth is a
+      # JWT signed with the private key, exchanged for an installation token; the
+      # repo the runner sits in never enters into it. Only the installation on
+      # pinternal/mojito-deploy matters.
+      - name: Mint app token for DarkoLopez/test2
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.MOJITO_DEPLOY_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.MOJITO_DEPLOY_DISPATCH_APP_PRIVATE_KEY }}
+          # Both are required and neither can be omitted: they default to the
+          # *current* repository, which would look for an installation on
+          # pinterest/mojito and 404. The two orgs differ on purpose.
+          owner: DarkoLopez
+          repositories: test2
+          # POST /dispatches needs contents: write. There is no narrower
+          # dispatch-specific permission, so this is the floor, not a choice.
+          permission-contents: write
+
+      - name: Dispatch to DarkoLopez/test2
         env:
-          GH_TOKEN: ${{ secrets.MOJITO_DEPLOY_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           MOJITO_SHA: ${{ github.sha }}
           MOJITO_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          # jq builds the payload so a branch or SHA can never break out of the
+          # JSON, and --input - keeps it off the command line.
           jq -nc \
             --arg sha "$MOJITO_SHA" \
             --arg branch "$MOJITO_BRANCH" \
             '{event_type: "mojito-updated", client_payload: {sha: $sha, branch: $branch}}' \
-          | gh api repos/DarkoLopez/test/dispatches --input -
+          | gh api repos/DarkoLopez/test2/dispatches --input -
+
+      # The dispatch is a trigger, not an instruction: the receiving workflow
+      # re-resolves mojito master itself and ignores the payload SHA. Losing a
+      # dispatch therefore costs latency, not correctness -- the next push
+      # catches up. That is why this job does not retry.
+
+# ---------------------------------------------------------------------------
+# Threat model
+#
+# Use a DEDICATED app for this, installed on pinternal/mojito-deploy with
+# Contents: write and nothing else. Do not reuse an existing bot app.
+#
+# The reason is not obvious: `permission-contents: write` above only narrows the
+# token *this workflow* requests. Anyone holding the private key can mint a token
+# carrying the installation's FULL grant. So the blast radius of this secret is
+# every permission the installation has -- not the one scope named above.
+#
+# pinterest/mojito is public. Secrets are withheld from fork pull requests, so a
+# drive-by PR cannot read these; the realistic exposure is anyone with write
+# access to pinterest/mojito adding a workflow that uses them. An app is better
+# than a PAT here only in that the minted token expires in an hour, is revocable,
+# and is not tied to a person's account -- the standing write access to
+# mojito-deploy is the same either way.
+#
+# If that trade is not worth making, delete this file and give mojito-deploy a
+# `schedule:` trigger instead. Its resolve step already reads mojito master with
+# `git ls-remote` over the public URL and needs no credential at all; polling
+# costs latency and nothing else.
+# ---------------------------------------------------------------------------
