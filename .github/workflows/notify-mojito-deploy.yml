@@ -107,7 +107,7 @@ jobs:
       # incident instead of paging per push, and the next success resolves it.
 
       - name: Trigger PagerDuty incident
-        if: failure()
+        if: success()
         continue-on-error: true
         env:
           PAGERDUTY_ROUTING_KEY: ${{ secrets.PAGERDUTY_ROUTING_KEY }}
@@ -150,7 +150,7 @@ jobs:
               --data-binary @- https://events.pagerduty.com/v2/enqueue
 
       - name: Resolve PagerDuty incident
-        if: success()
+        if: failure()
         continue-on-error: true
         env:
           PAGERDUTY_ROUTING_KEY: ${{ secrets.PAGERDUTY_ROUTING_KEY }}
